@@ -4,8 +4,8 @@
    После сохранения (Commit changes) игра обновится примерно через минуту.
    ===================================================================== */
 window.TG_CONFIG = {
-  bot: "",          // имя бота без @, например: "CatMergeIdleBot"
-  app: "",          // короткое имя игры из BotFather (/newapp), например: "play"
+  bot: "CatMergeIdle_Bot",          // имя бота без @, например: "CatMergeIdleBot"
+  app: "play",          // короткое имя игры из BotFather (/newapp), например: "play"
   adsReward: "",    // AdsGram: номер блока рекламы за награду, например: "12345"
   adsInter: "",     // AdsGram: номер межстраничного блока, например: "int-12345"
   adsDebug: false,  // true — показывать тестовую рекламу AdsGram. Перед запуском верните false
