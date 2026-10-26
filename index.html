@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Cat Merge Idle</title>
+<!-- Telegram Mini App: официальный скрипт Telegram (если недоступен — копия из папки игры) -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>window.Telegram || document.write('<script src="telegram-web-app.js"><\/script>');</script>
+<!-- Настройки: бот, игра, блоки рекламы -->
+<script src="tg-config.js"></script>
+<!-- AdsGram: реклама в Telegram Mini Apps -->
+<script async src="https://sad.adsgram.ai/js/sad.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body oncontextmenu="return false">
+<div id="loading"><img id="loadLogo" src="img/logo.jpg" alt="Cat Merge Idle" width="280" height="280"><div id="loadCat" class="hidden"></div><div class="lbar"><i></i></div></div>
+
+<div id="scene"></div>
+<div class="side" id="sideL"><div class="sfx"></div><div class="sIn"></div></div>
+<div class="side" id="sideR"><div class="sfx"></div><div class="sIn"></div></div>
+<div id="app">
+  <div id="fx"></div>
+  <div id="top">
+    <button class="pill" id="coinsPill" aria-label="Монеты"><span class="pi">🪙</span><span class="pv"><b id="coins">0</b><small id="cps">+0 в сек</small></span></button>
+    <button class="pill" id="pawsPill" aria-label="Лапки"><span class="pi">🐾</span><b id="paws">0</b></button>
+    <button class="pill hidden" id="evPill" aria-label="Событие"><span class="pi" id="evIc">🍬</span><b id="evAmt">0</b></button>
+    <div class="grow"></div>
+    <button class="iconBtn" id="rewBtn" aria-label="Награды">🎁<i class="dot" id="rewDot"></i></button>
+    <button class="iconBtn" id="socBtn" aria-label="Друзья и рейтинг">👥</button>
+    <button class="iconBtn" id="setBtn" aria-label="Настройки">⚙️</button>
+  </div>
+
+  <div id="goals">
+    <div class="goal" id="g1"><div class="gt" id="g1t"></div><div class="bar"><i id="g1b"></i></div></div>
+    <div class="goal" id="g2"><div class="gt" id="g2t"></div><div class="bar y"><i id="g2b"></i></div></div>
+    <div class="goal" id="g3"><div class="gt" id="g3t"></div><div class="bar"><i id="g3b"></i></div></div>
+  </div>
+
+  <div id="midRow">
+    <div id="worldTitle"></div>
+    <div id="turboTag" class="hidden">⚡ ×2 <span id="turboLeft"></span></div>
+  </div>
+
+  <div id="field">
+    <div class="col" id="leftCol">
+      <button class="sBtn" id="freeBtn"><span>🎬</span><small id="freeLbl">Подарок</small></button>
+      <button class="sBtn" id="turboBtn"><span>⚡</span><small>Турбо</small></button>
+      <button class="sBtn hidden" id="resBtn"><span id="resIc">🌸</span><small id="resAmt">0</small></button>
+      <button class="sBtn hidden" id="evBtn"><span id="evBtnIc">🎃</span><small>Событие</small></button>
+    </div>
+    <div id="boardWrap"><div id="board"></div><div id="comboTag"></div></div>
+    <div class="col" id="rightCol"></div>
+  </div>
+
+  <div id="actions">
+    <button class="btn primary" id="boxBtn"><span class="bl">📦 Коробка <b id="boxCount">0</b></span><small id="boxInfo">…</small><i id="boxProg"></i></button>
+    <button class="btn accent" id="buyBtn"><span class="bl">🛒 Купить кота</span><small>🪙 <span id="buyCost">0</span></small></button>
+  </div>
+
+  <nav id="nav">
+    <button data-p="board" class="on"><span>🏠</span><small>Поле</small></button>
+    <button data-p="upgrades"><span>⬆️</span><small>Улучшить</small><i class="dot" id="upDot"></i></button>
+    <button data-p="shop"><span>🛒</span><small>Магазин</small></button>
+    <button data-p="album"><span>📖</span><small>Альбом</small></button>
+    <button data-p="worlds"><span>🌍</span><small>Миры</small><i class="dot" id="worldDot"></i></button>
+  </nav>
+
+  <div id="sheet"><div id="sheetBox"><div id="sheetHead"><span id="sheetTitle"></span><button class="close" id="sheetClose" aria-label="Закрыть">✕</button></div><div id="sheetTabs"></div><div id="sheetBody"></div></div></div>
+  <div id="modal"><div id="modalBox"></div></div>
+  <div id="toast"></div>
+  <div id="tip"></div>
+  <div id="hint"><span class="bubble" id="hintText"></span></div>
+  <div id="hand">👆</div>
+  <div id="aimBar" class="hidden"><span id="aimText"></span> <button id="aimCancel">Отмена</button></div>
+</div>
+<div id="ghost"></div>
+<div id="adFake"><div>Ad</div><div style="opacity:.7;font-size:.9rem">(test mode outside Telegram)</div><div id="adFakeT">2</div></div>
+
+<script src="js/i18n.js"></script>
+<script src="js/data.js"></script>
+<script src="js/art.js"></script>
+<script src="js/scene.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/net.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
