@@ -6,7 +6,7 @@
 window.TG_CONFIG = {
   bot: "CatMergeIdle_Bot",          // имя бота без @, например: "CatMergeIdleBot"
   app: "play",          // короткое имя игры из BotFather (/newapp), например: "play"
-  adsReward: "",    // AdsGram: номер блока рекламы за награду, например: "12345"
-  adsInter: "",     // AdsGram: номер межстраничного блока, например: "int-12345"
+  adsReward: "56145",    // AdsGram: номер блока рекламы за награду, например: "12345"
+  adsInter: "int-56146",     // AdsGram: номер межстраничного блока, например: "int-12345"
   adsDebug: false,  // true — показывать тестовую рекламу AdsGram. Перед запуском верните false
 };
