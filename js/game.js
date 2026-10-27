@@ -48,7 +48,7 @@ function defaultState(){
     weekly:{week:0, score:0, claimed:[false,false,false]},
     ev:{id:"", amt:0},
     friends:{code:"", invitedBy:"", list:[]},
-    set:{sound:true, music:true, vibro:true, big:false},
+    set:{sound:true, music:true, vibro:true, big:false, hints:true},
     stats:{merges:0, earned:0, boxes:0, ads:0, bought:0, taps:0},
     tutorial:0, tips:{}, lastSeen:now(), savedAt:0, resetEpoch:"", wasReset:false,
   };

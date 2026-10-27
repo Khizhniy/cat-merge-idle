@@ -126,7 +126,7 @@ const YG = {
       if (!this._base && (obj.savedAt || 0) <= (this._bootAt || 0)){ this._base = h.at; return false; }
       this._slot = h.slot; this._base = h.at;
       adoptState(obj);
-      UI.toast(T("☁️ Прогресс загружен с другого устройства"));
+      UI.toast(T("☁️ Прогресс загружен с другого устройства"), true);
       return true;
     }catch(e){ console.warn("cloud sync", e); return false; }
   },
@@ -172,22 +172,42 @@ const YG = {
     if (!this._ctl[blockId]){ try{ this._ctl[blockId] = window.Adsgram.init({blockId:String(blockId), debug:!!TGC.adsDebug}); }catch(e){ console.warn("Adsgram.init", e); return null; } }
     return this._ctl[blockId];
   },
+  // Telegram на компьютере: Desktop, macOS, веб-версии
+  isDesktop(){ const p = this.sdk && this.sdk.platform || ""; return /^(tdesktop|macos|weba|webk|web|unigram)$/.test(p); },
+  _adLast:null,
+  _note(ok, r){ this._adLast = {at:Date.now(), ok, desc: r ? String(r.description || (r.error ? "error" : "") || r.state || "") : ""}; },
+  // на ПК рекламы в AdsGram может не быть — кнопки «🎬» тогда работают как подарок, а не «мёртвые»
+  _noAd(onReward, onFail, why){
+    if (this.isDesktop()){ if (!this._pcTold){ this._pcTold = true; UI.toast(T("На компьютере реклама сейчас недоступна — подарок просто так 🎁"), true); } onReward(); return; }
+    UI.toast(T(why || "Реклама сейчас недоступна. Попробуй чуть позже"), true); onFail && onFail();
+  },
   rewarded(onReward, onFail){
     if (this.adBusy) return;
     // вне Telegram — тестовая заглушка
     if (!this.sdk){ this.adBusy = true; UI.fakeAd(()=>{ this.adBusy = false; onReward(); }); return; }
     // блок рекламы ещё не настроен (игра ждёт одобрения AdsGram) — награда без рекламы, кнопки не «мёртвые»
-    if (!TGC.adsReward){ if (!this._freeTold){ this._freeTold = true; UI.toast(T("Реклама скоро появится. А пока — подарок просто так! 🎁")); } onReward(); return; }
+    if (!TGC.adsReward){ if (!this._freeTold){ this._freeTold = true; UI.toast(T("Реклама скоро появится. А пока — подарок просто так! 🎁"), true); } onReward(); return; }
     const ad = this._ad(TGC.adsReward);
-    if (!ad){ UI.toast(T("Реклама сейчас не загрузилась. Попробуй чуть позже")); onFail && onFail(); return; }
+    if (!ad){ this._note(false, {description:"no script"}); return this._noAd(onReward, onFail, "Реклама сейчас не загрузилась. Попробуй чуть позже"); }
     this.adBusy = true; this._adOpen = true; this._applyPause();
     ad.show().then(r=>{
-      if (r && r.done) onReward(); else { UI.toast(T("Видео не досмотрено — подарка нет")); onFail && onFail(); }
+      this._note(!!(r && r.done), r);
+      if (r && r.done) onReward(); else { UI.toast(T("Видео не досмотрено — подарка нет"), true); onFail && onFail(); }
     }).catch(r=>{
-      // ошибку загрузки AdsGram показывает сам; если игрок закрыл видео — подсказка от игры
-      if (!(r && r.error)) UI.toast(T("Видео не досмотрено — подарка нет"));
-      onFail && onFail();
+      this._note(false, r);
+      if (r && r.error) this._noAd(onReward, onFail);                          // реклама не загрузилась / нет рекламы
+      else { UI.toast(T("Видео не досмотрено — подарка нет"), true); onFail && onFail(); }   // игрок закрыл видео
     }).finally(()=>{ this.adBusy = false; this._adOpen = false; this._applyPause(); });
+  },
+  // строки для экрана «Настройки»: состояние облака и рекламы
+  diag(){
+    if (!this.sdk) return [];
+    let ad;
+    if (!TGC.adsReward) ad = T("📺 Реклама: блоки AdsGram не настроены");
+    else if (!window.Adsgram) ad = T("📺 Реклама: скрипт AdsGram не загрузился");
+    else if (!this._adLast) ad = T("📺 Реклама: ещё не показывалась");
+    else ad = this._adLast.ok ? T("📺 Реклама: показана") : `${T("📺 Реклама: не показана")}${this._adLast.desc ? " — " + this._adLast.desc : ""}`;
+    return [this.cloudStatus(), `${ad} · ${this.sdk.platform || "?"}`];
   },
   // межстраничная реклама — только в естественных паузах и не чаще раза в 3 минуты
   interstitial(){

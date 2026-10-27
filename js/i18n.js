@@ -750,7 +750,16 @@ const EN_DICT = {
 "☁️ Облако Telegram недоступно — обновите Telegram": "☁️ Telegram cloud is unavailable. Please update Telegram",
 "☁️ Облако Telegram: сохранено в": "☁️ Telegram cloud: saved at",
 "☁️ Облако Telegram: ошибка": "☁️ Telegram cloud: error",
-"☁️ Облако Telegram: подключено": "☁️ Telegram cloud: connected"
+"☁️ Облако Telegram: подключено": "☁️ Telegram cloud: connected",
+"Подсказки": "Hints",
+"сообщения на экране; закрываются тапом или смахиванием": "on-screen messages; tap or swipe to close",
+"На компьютере реклама сейчас недоступна — подарок просто так 🎁": "Ads aren't available on computer right now, so here's a free gift 🎁",
+"Реклама сейчас недоступна. Попробуй чуть позже": "No ads available right now. Try again a bit later",
+"📺 Реклама: ещё не показывалась": "📺 Ads: not shown yet",
+"📺 Реклама: показана": "📺 Ads: shown",
+"📺 Реклама: не показана": "📺 Ads: not shown",
+"📺 Реклама: блоки AdsGram не настроены": "📺 Ads: AdsGram blocks are not set up",
+"📺 Реклама: скрипт AdsGram не загрузился": "📺 Ads: the AdsGram script didn't load"
 };
 function T(s){
   if (LANG !== "en" || s == null) return s;

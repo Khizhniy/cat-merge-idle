@@ -38,7 +38,9 @@ const UI = {
     $("sheet").addEventListener("pointerdown", e=>{ if (e.target.id === "sheet") this.closeSheet(); });
     $("aimCancel").onclick = ()=>Game.setAim(null);
     document.querySelectorAll("#nav button").forEach(b=>b.onclick=()=>{ SFX.click(); b.dataset.p === "board" ? this.closeSheet() : this.openSheet(b.dataset.p); });
-    $("tip").onclick = ()=>{ $("tip").style.display = "none"; };
+    // подсказки снизу (toast) и сверху (tip): закрываются тапом или смахиванием в любую сторону
+    this.dismissable($("toast"), ()=>this.hideToast(), "-50%");
+    this.dismissable($("tip"), ()=>{ $("tip").style.display = "none"; }, "0px");
   },
   wake(){ Snd.ctx(); Snd.startMusic(); },
   catHTML(l, anim){
@@ -287,9 +289,24 @@ const UI = {
     }
   },
   _toastT:null,
-  toast(t){ const el = $("toast"); el.textContent = t; el.style.display = "block"; clearTimeout(this._toastT); this._toastT = setTimeout(()=>el.style.display="none", 2600); },
+  // force — показать, даже если подсказки выключены в настройках (реклама, облако)
+  toast(t, force){
+    if (S.set.hints === false && !force) return;
+    const el = $("toast"); el.textContent = t; el.style.display = "block"; el.style.transform = ""; el.style.opacity = "";
+    clearTimeout(this._toastT); this._toastT = setTimeout(()=>this.hideToast(), 2600);
+  },
+  hideToast(){ const el = $("toast"); clearTimeout(this._toastT); el.style.display = "none"; el.style.transform = ""; el.style.opacity = ""; },
+  dismissable(el, hide, baseX){
+    let sw = null;
+    const reset = ()=>{ el.style.transform = ""; el.style.opacity = ""; el.style.transition = ""; };
+    el.addEventListener("pointerdown", e=>{ e.stopPropagation(); sw = {x:e.clientX, y:e.clientY, id:e.pointerId}; try{ el.setPointerCapture(e.pointerId); }catch(_){} el.style.transition = "none"; });
+    el.addEventListener("pointermove", e=>{ if (!sw || e.pointerId !== sw.id) return; const dx = e.clientX - sw.x, dy = e.clientY - sw.y, d = Math.hypot(dx, dy);
+      el.style.transform = `translate(calc(${baseX} + ${dx}px), ${dy}px)`; el.style.opacity = String(Math.max(.15, 1 - d/160)); });
+    const end = e=>{ if (!sw) return; sw = null; reset(); hide(); };
+    el.addEventListener("pointerup", end); el.addEventListener("pointercancel", end);
+  },
   _tipT:null,
-  tip(t){ const el = $("tip"); el.innerHTML = `💡 ${t}`; el.style.display = "block"; clearTimeout(this._tipT); this._tipT = setTimeout(()=>el.style.display="none", 7000); },
+  tip(t){ if (S.set.hints === false) return; const el = $("tip"); el.innerHTML = `💡 ${t}`; el.style.display = "block"; clearTimeout(this._tipT); this._tipT = setTimeout(()=>el.style.display="none", 7000); },
   autoTips(){
     if (S.tutorial < 3 || $("modal").classList.contains("on")) return;
     const once = (k, cond, text)=>{ if (!S.tips[k] && cond){ S.tips[k] = 1; this.tip(text); return true; } return false; };
@@ -729,12 +746,12 @@ const UI = {
   /* ---------- настройки ---------- */
   sheet_settings(){
     const row = (ic,t,k,d)=>`<div class="row"><div class="ic">${ic}</div><div class="tx"><b>${t}</b>${d||""}</div><button class="toggle ${S.set[k]?"on":""}" data-act="set" data-arg="${k}" aria-label="${t}"></button></div>`;
-    return row("🔊",T("Звуки"),"sound") + row("🎵",T("Музыка"),"music") + row("📳",T("Вибрация"),"vibro",T("на телефоне")) + row("🔎",T("Крупный текст"),"big",T("всё станет крупнее")) +
+    return row("🔊",T("Звуки"),"sound") + row("🎵",T("Музыка"),"music") + row("📳",T("Вибрация"),"vibro",T("на телефоне")) + row("🔎",T("Крупный текст"),"big",T("всё станет крупнее")) + row("💬",T("Подсказки"),"hints",T("сообщения на экране; закрываются тапом или смахиванием")) +
       `<div class="mBtns" style="margin:.4rem 0 .8rem"><button class="btn" data-act="help">${T("❓ Как играть")}</button></div>
       <div class="sec">${T("СТАТИСТИКА")}</div><div class="row" style="display:block;font-size:.95rem;line-height:1.75">
       ${T("Соединено котиков:")} <b>${fmt(S.stats.merges)}</b><br>${T("Открыто коробок:")} <b>${fmt(S.stats.boxes)}</b><br>${T("Всего заработано:")} <b>${fmt(S.stats.earned)} 🪙</b><br>
       ${T("Котиков в альбоме:")} <b>${albumCount()} ${T("из")} ${ALBUM.length}</b><br>${T("Перерождений:")} <b>${S.prestige.count}</b><br>${T("Твой код друга:")} <b>${esc(S.friends.code)}</b></div>
-      <div class="mBtns"><button class="btn ghostBtn" data-act="reset">${T("Начать всё заново")}</button></div>${YG.cloudStatus && YG.cloudStatus() ? `<p class="note" style="text-align:center;font-size:.8rem">${esc(YG.cloudStatus())}</p>` : ""}<p class="note" style="text-align:center">${T("Версия")} ${CONFIG.version}</p>`;
+      <div class="mBtns"><button class="btn ghostBtn" data-act="reset">${T("Начать всё заново")}</button></div>${YG.diag ? YG.diag().filter(Boolean).map(l=>`<p class="note" style="text-align:center;font-size:.8rem;margin:.1rem">${esc(l)}</p>`).join("") : ""}<p class="note" style="text-align:center">${T("Версия")} ${CONFIG.version}</p>`;
   },
   help(){
     this.showModal(`<h2>${T("Как играть ❓")}</h2><div style="text-align:left;font-size:1rem;line-height:1.5;color:var(--text)">
