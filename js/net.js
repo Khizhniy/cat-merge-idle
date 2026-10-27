@@ -33,7 +33,7 @@ const YG = {
   async init(){
     const W = window.Telegram && window.Telegram.WebApp;
     // вне Telegram (просто в браузере) — тестовый режим: язык браузера, локальные сохранения
-    if (!W || !W.initData){ I18N.apply(String(navigator.language || "ru").toLowerCase()); return; }
+    if (!W || (!W.initData && (!W.platform || W.platform === "unknown"))){ I18N.apply(String(navigator.language || "ru").toLowerCase()); return; }
     this.sdk = W;
     try{ W.ready(); }catch(e){}
     try{ W.expand(); }catch(e){}
@@ -47,7 +47,9 @@ const YG = {
     this.payload = u.start_param || "";        // ссылка-приглашение: t.me/бот/игра?startapp=f_КОД
     // Telegram свернули / развернули — пауза и тишина, прогресс сохраняется
     try{ W.onEvent("deactivated", ()=>{ this._platPause = true; this._applyPause(); try{ Game.save(true); }catch(e){} }); }catch(e){}
-    try{ W.onEvent("activated", ()=>{ this._platPause = false; this._applyPause(); }); }catch(e){}
+    try{ W.onEvent("activated", ()=>{ this._platPause = false; this._applyPause(); this.syncCheck(); }); }catch(e){}
+    document.addEventListener("visibilitychange", ()=>{ if (!document.hidden) this.syncCheck(); });
+    setInterval(()=>{ if (!document.hidden && !Game.paused) this.syncCheck(); }, 45000);
     // вибрация через Telegram (navigator.vibrate не работает на iPhone)
     if (W.HapticFeedback && this.ver("6.1")){
       Snd.vibrate = ms => { if (!S.set.vibro) return; try{ Array.isArray(ms) ? W.HapticFeedback.notificationOccurred("warning") : W.HapticFeedback.impactOccurred("light"); }catch(e){} };
@@ -67,43 +69,100 @@ const YG = {
   uid(){ return this.user ? String(this.user.id) : ""; },
   name(){ return this.user ? (this.user.first_name || "") : ""; },
 
-  /* ---------- сохранение: Telegram CloudStorage ----------
-     Запись идёт в один из двух слотов (a/b) по частям, а в ключ "slot" — какой слот целый.
-     Так оборванная запись никогда не портит прошлое сохранение. */
+  /* ---------- сохранение ----------
+     1) Облако Telegram (CloudStorage) — общий прогресс на всех устройствах аккаунта.
+        Запись по частям в один из двух слотов (a/b); в ключ "slot" пишется, какой слот целый,
+        с какого устройства и когда. Оборванная запись не портит прошлое сохранение.
+     2) Хранилище устройства Telegram (DeviceStorage, Telegram 2025+) — копия, которую не стирает
+        очистка кэша браузера внутри Telegram.
+     3) localStorage — как раньше.
+     Перед каждой записью в облако игра проверяет, нет ли там более нового прогресса с другого
+     устройства; если есть — загружает его, а не затирает. Каждый запрос ограничен по времени,
+     поэтому «потерянный» ответ Telegram (например, при сворачивании) больше не останавливает сохранения. */
+  sid: Math.random().toString(36).slice(2, 10), _bootAt:0,
+  onLoaded(st){ this._bootAt = st.savedAt || 0; },
   _cs(){ return this.sdk && this.ver("6.9") && this.sdk.CloudStorage ? this.sdk.CloudStorage : null; },
-  _get(keys){ const cs = this._cs(); return new Promise((res, rej)=>{ try{ cs.getItems(keys, (err, v)=> err ? rej(err) : res(v || {})); }catch(e){ rej(e); } }); },
-  _set(k, v){ const cs = this._cs(); return new Promise((res, rej)=>{ try{ cs.setItem(k, v, (err, ok)=> err ? rej(err) : res(ok)); }catch(e){ rej(e); } }); },
+  _ds(){ return this.sdk && this.ver("9.0") && this.sdk.DeviceStorage ? this.sdk.DeviceStorage : null; },
+  _call(fn, ms){ return new Promise((res, rej)=>{ let done = false; const t = setTimeout(()=>{ if (!done){ done = true; rej(new Error("timeout")); } }, ms);
+    try{ fn((err, v)=>{ if (done) return; done = true; clearTimeout(t); err ? rej(err) : res(v); }); }catch(e){ if (!done){ done = true; clearTimeout(t); rej(e); } } }); },
+  _get(keys){ const cs = this._cs(); return this._call(cb=>cs.getItems(keys, cb), 9000).then(v=>v || {}); },
+  _set(k, v){ const cs = this._cs(); return this._call(cb=>cs.setItem(k, v, cb), 9000); },
+  // только ASCII: тогда длина строки = числу байт, и часть точно влезает в лимит 4096
+  _pack(obj){ return JSON.stringify(obj).replace(/[\u007f-￿]/g, c=>"\\u" + c.charCodeAt(0).toString(16).padStart(4, "0")); },
+  _head(v){ const m = /^([ab]):(\d+)(?::([a-z0-9]*):(\d+))?$/.exec(v || ""); return m ? {slot:m[1], n:+m[2], sid:m[3] || "", at:+(m[4] || 0)} : null; },
+  _status:{state:"", at:0, err:""},
+  async _readCloud(head){
+    const keys = []; for (let i=0;i<head.n;i++) keys.push(head.slot + i);
+    const parts = await this._get(keys);
+    return JSON.parse(keys.map(k=>parts[k] || "").join(""));
+  },
   async loadCloud(){
     if (!this._cs()) return null;
     try{
-      const head = await withTimeout(this._get(["slot"]), 6000, null);
-      const m = head && /^([ab]):(\d+)$/.exec(head.slot || ""); if (!m) return null;
-      const keys = []; for (let i=0;i<+m[2];i++) keys.push(m[1] + i);
-      const parts = await withTimeout(this._get(keys), 8000, null); if (!parts) return null;
-      return JSON.parse(keys.map(k=>parts[k] || "").join(""));
-    }catch(e){ console.warn("cloud load", e); return null; }
+      const h = this._head((await this._get(["slot"])).slot); if (!h) return null;
+      this._slot = h.slot; this._base = h.at;
+      return await this._readCloud(h);
+    }catch(e){ console.warn("cloud load", e); this._status = {state:"err", at:Date.now(), err:String(e && e.message || e)}; return null; }
   },
-  _cloudBusy:false, _cloudAgain:null, _cloudLast:0, _cloudT:0, _slot:"",
+  async loadDevice(){
+    const ds = this._ds(); if (!ds) return null;
+    try{ const v = await this._call(cb=>ds.getItem("save", cb), 4000); return v ? JSON.parse(v) : null; }catch(e){ return null; }
+  },
+  _devT:0,
+  saveDevice(obj){
+    const ds = this._ds(); if (!ds || Date.now() - this._devT < 3000) return;
+    this._devT = Date.now();
+    try{ ds.setItem("save", JSON.stringify(obj), ()=>{}); }catch(e){}
+  },
+  // в облаке более новый прогресс с другого устройства? — загрузить его
+  async syncCheck(){
+    if (!this._cs() || this._cloudBusy || !window.__booted) return false;
+    try{
+      const h = this._head((await this._get(["slot"])).slot);
+      if (!h || !h.sid || h.sid === this.sid || h.at <= this._base) return false;
+      const obj = await this._readCloud(h);
+      if (!obj) return false;
+      // облако не читалось при запуске: берём его, только если оно новее того, с чем игра стартовала
+      if (!this._base && (obj.savedAt || 0) <= (this._bootAt || 0)){ this._base = h.at; return false; }
+      this._slot = h.slot; this._base = h.at;
+      adoptState(obj);
+      UI.toast(T("☁️ Прогресс загружен с другого устройства"));
+      return true;
+    }catch(e){ console.warn("cloud sync", e); return false; }
+  },
+  _cloudBusy:false, _cloudAgain:null, _cloudLast:0, _cloudT:0, _slot:"", _base:0,
   async saveCloud(obj){
     if (!this._cs()) return;
     if (this._cloudBusy){ this._cloudAgain = obj; return; }
     this._cloudBusy = true; this._cloudLast = Date.now();
     try{
-      const s = JSON.stringify(obj), n = Math.ceil(s.length / CHUNK);
-      if (!this._slot){ const h = await withTimeout(this._get(["slot"]), 4000, {}); this._slot = /^a:/.test((h||{}).slot || "") ? "a" : "b"; }
-      const slot = this._slot === "a" ? "b" : "a";
+      const h = this._head((await this._get(["slot"])).slot);
+      // другое устройство сохранило позже — не затираем его прогресс
+      if (h && h.sid && h.sid !== this.sid && h.at > this._base){ this._cloudBusy = false; await this.syncCheck(); return; }
+      const s = this._pack(obj), n = Math.ceil(s.length / CHUNK), at = Math.max(Date.now(), this._base + 1);
+      const slot = (h ? h.slot : this._slot) === "a" ? "b" : "a";
       for (let i=0;i<n;i++) await this._set(slot + i, s.slice(i*CHUNK, (i+1)*CHUNK));
-      await this._set("slot", slot + ":" + n);
-      this._slot = slot;
-    }catch(e){ console.warn("cloud save", e); }
-    this._cloudBusy = false;
-    if (this._cloudAgain){ const o = this._cloudAgain; this._cloudAgain = null; this.scheduleCloud(o, 3000); }
+      await this._set("slot", `${slot}:${n}:${this.sid}:${at}`);
+      this._slot = slot; this._base = at;
+      this._status = {state:"ok", at:Date.now(), err:""};
+    }catch(e){ console.warn("cloud save", e); this._status = {state:"err", at:Date.now(), err:String(e && e.message || e)}; }
+    finally{ this._cloudBusy = false; }
+    if (this._cloudAgain){ const o = this._cloudAgain; this._cloudAgain = null; this.scheduleCloud(o, 2000); }
   },
   scheduleCloud(obj, delay=2500){
     if (!this._cs()) return;
     clearTimeout(this._cloudT);
     const wait = Math.max(delay, 4000 - (Date.now() - this._cloudLast));
     this._cloudT = setTimeout(()=>this.saveCloud(obj), wait);
+  },
+  // строка для экрана «Настройки»
+  cloudStatus(){
+    if (!this.sdk) return "";
+    if (!this._cs()) return T("☁️ Облако Telegram недоступно — обновите Telegram");
+    const st = this._status, tm = st.at ? new Date(st.at).toLocaleTimeString(LANG === "en" ? "en-GB" : "ru-RU", {hour:"2-digit", minute:"2-digit"}) : "";
+    if (st.state === "ok") return `${T("☁️ Облако Telegram: сохранено в")} ${tm}`;
+    if (st.state === "err") return `${T("☁️ Облако Telegram: ошибка")} (${tm}): ${st.err}`;
+    return T("☁️ Облако Telegram: подключено");
   },
 
   /* ---------- реклама: AdsGram ---------- */

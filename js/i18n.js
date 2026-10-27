@@ -745,7 +745,12 @@ const EN_DICT = {
 "мурр": "purr",
 "мяу-бип": "meow-beep",
 "📨 Позвать друга в Telegram": "📨 Invite a friend on Telegram",
-"Реклама скоро появится. А пока — подарок просто так! 🎁": "Ads are coming soon. For now, here's a free gift! 🎁"
+"Реклама скоро появится. А пока — подарок просто так! 🎁": "Ads are coming soon. For now, here's a free gift! 🎁",
+"☁️ Прогресс загружен с другого устройства": "☁️ Progress loaded from your other device",
+"☁️ Облако Telegram недоступно — обновите Telegram": "☁️ Telegram cloud is unavailable. Please update Telegram",
+"☁️ Облако Telegram: сохранено в": "☁️ Telegram cloud: saved at",
+"☁️ Облако Telegram: ошибка": "☁️ Telegram cloud: error",
+"☁️ Облако Telegram: подключено": "☁️ Telegram cloud: connected"
 };
 function T(s){
   if (LANG !== "en" || s == null) return s;

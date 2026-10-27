@@ -1,0 +1,31 @@
+/* =====================================================================
+   TELEGRAM: одна раскладка для любого экрана — игра в колонке по центру,
+   поле всегда посередине. Все размеры (текст, кнопки, поле) в rem, а размер
+   rem считается от ширины И высоты окна, поэтому всё помещается без обрезки.
+   ===================================================================== */
+:root{font-size:clamp(10px, min(4.15vw, 2.35vh), 16px)}
+html.big{font-size:clamp(11px, min(4.55vw, 2.6vh), 18px)}
+#app{max-width:34rem}
+.side{width:calc((100vw - 34rem)/2)}
+@media (min-width:640px) and (min-height:300px){ .side{display:block} }
+
+/* верхняя панель: ничего не налезает друг на друга */
+#top{gap:.35rem;padding:.45rem .5rem .25rem}
+.pill{padding:.3rem .55rem;flex:0 1 auto;overflow:hidden}
+.pill .pv{min-width:0}
+.pill b,.pill small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#top .iconBtn{flex:none}
+/* на узких экранах счётчик события живёт только на кнопке «🎃 Событие» слева от поля */
+@media (max-width:28rem){ #evPill{display:none!important} }
+@media (max-aspect-ratio:3/4){ #evPill{display:none!important} }
+
+/* цели: текст переносится, не выходит за карточку */
+.goal{overflow:hidden;word-break:break-word}
+.goal b{overflow:hidden;text-overflow:ellipsis}
+
+/* низкие окна: плотнее отступы, поле получает больше места */
+@media (max-height:640px){
+  #top{padding:.35rem .5rem .15rem} #goals{padding:.15rem .5rem} #goals .goal{min-height:2.7rem}
+  #midRow{padding:.15rem .7rem 0;min-height:1.6rem} #actions{padding:.25rem .5rem .35rem} #nav{padding-top:.15rem}
+}
+#toast{bottom:9rem}

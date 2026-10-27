@@ -543,6 +543,7 @@ const Game = {
   save(cloud){
     this.snapshot();
     try{ localStorage.setItem("catMergeIdle_v3", JSON.stringify(S)); }catch(e){}
+    if (YG.saveDevice) YG.saveDevice(S);          // копия в хранилище устройства платформы (если есть)
     if (cloud === true) return YG.saveCloud(S);
     if (cloud !== "local") YG.scheduleCloud(S);   // прогресс уходит в облако сразу после действия игрока (1.9)
     return Promise.resolve();
@@ -620,9 +621,10 @@ async function loadState(){
   if (!local){ try{ const v2 = JSON.parse(localStorage.getItem("catMergeIdle_v2")); if (v2) local = migrateV2(v2); }catch(e){} }
   if (!local){ try{ const v1 = JSON.parse(localStorage.getItem("catMergeIdle_v1")); if (v1) local = migrateV1(v1); }catch(e){} }
   cloud = await YG.loadCloud();
+  const device = YG.loadDevice ? await YG.loadDevice() : null;
   if (cloud && cloud.v === 2) cloud = migrateV2(cloud);
   else if (cloud && !cloud.v && cloud.grid) cloud = migrateV1(cloud);
-  let best = [local, cloud].filter(Boolean).sort((a,b)=>(b.savedAt||0)-(a.savedAt||0))[0];
+  let best = [local, cloud, device].filter(Boolean).sort((a,b)=>(b.savedAt||0)-(a.savedAt||0))[0];
   // 2.3: магнит → кошачий корм, бомба → брызгалка
   if (best && best.boost && ("magnet" in best.boost || "bomb" in best.boost)){
     const o = best.boost; o.food = (o.food||0) + (o.magnet||0); o.spray = (o.spray||0) + (o.bomb||0); delete o.magnet; delete o.bomb;
@@ -633,6 +635,16 @@ async function loadState(){
   const epoch = resetEpoch();
   if (best && epoch && String(best.resetEpoch || "") !== epoch) best = resetSave(best, epoch);
   return best ? normalizeState(deepMerge(defaultState(), best)) : null;
+}
+
+// загрузить прогресс, пришедший с другого устройства (облако платформы), прямо во время игры
+function adoptState(obj){
+  S = normalizeState(deepMerge(defaultState(), obj));
+  born = new Array(CONFIG.cells).fill(0); combo = {n:0, last:0}; aim = null;
+  try{ localStorage.setItem("catMergeIdle_v3", JSON.stringify(S)); }catch(e){}
+  if (YG.saveDevice) YG.saveDevice(S);
+  document.documentElement.classList.toggle("big", !!S.set.big);
+  UI.setAim(null); UI.closeSheet(); UI.applyWorld(); UI.update();
 }
 
 /* ---------- офлайн-доход ---------- */

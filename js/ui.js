@@ -734,7 +734,7 @@ const UI = {
       <div class="sec">${T("СТАТИСТИКА")}</div><div class="row" style="display:block;font-size:.95rem;line-height:1.75">
       ${T("Соединено котиков:")} <b>${fmt(S.stats.merges)}</b><br>${T("Открыто коробок:")} <b>${fmt(S.stats.boxes)}</b><br>${T("Всего заработано:")} <b>${fmt(S.stats.earned)} 🪙</b><br>
       ${T("Котиков в альбоме:")} <b>${albumCount()} ${T("из")} ${ALBUM.length}</b><br>${T("Перерождений:")} <b>${S.prestige.count}</b><br>${T("Твой код друга:")} <b>${esc(S.friends.code)}</b></div>
-      <div class="mBtns"><button class="btn ghostBtn" data-act="reset">${T("Начать всё заново")}</button></div><p class="note" style="text-align:center">${T("Версия")} ${CONFIG.version}</p>`;
+      <div class="mBtns"><button class="btn ghostBtn" data-act="reset">${T("Начать всё заново")}</button></div>${YG.cloudStatus && YG.cloudStatus() ? `<p class="note" style="text-align:center;font-size:.8rem">${esc(YG.cloudStatus())}</p>` : ""}<p class="note" style="text-align:center">${T("Версия")} ${CONFIG.version}</p>`;
   },
   help(){
     this.showModal(`<h2>${T("Как играть ❓")}</h2><div style="text-align:left;font-size:1rem;line-height:1.5;color:var(--text)">
@@ -758,7 +758,7 @@ const UI = {
     $("hintText").textContent = text; const h = $("hint"); h.style.display = "block";
     const br = $("board").getBoundingClientRect(), ar = $("app").getBoundingClientRect();
     h.style.top = Math.max(0, br.top - ar.top - 12) + "px";
-    if (matchMedia("(orientation:landscape) and (max-height:540px) and (pointer:coarse), (orientation:landscape) and (max-height:430px)").matches){ h.style.left = (br.left - ar.left - 30) + "px"; h.style.width = (br.width + 60) + "px"; h.style.right = "auto"; }
+    if (matchMedia("(max-width:1px)").matches){ h.style.left = (br.left - ar.left - 30) + "px"; h.style.width = (br.width + 60) + "px"; h.style.right = "auto"; }
     else { h.style.left = "0"; h.style.right = "0"; h.style.width = ""; }
     const hand = $("hand"); hand.style.display = "block"; cancelAnimationFrame(this._handAnim);
     const loop = t=>{
@@ -801,6 +801,7 @@ async function boot(){
   await YG.init();
   const saved = await loadState();
   if (saved) S = saved;
+  if (YG.onLoaded) YG.onLoaded(S);
   document.documentElement.classList.toggle("big", !!S.set.big);
   Game.ensureCode();
   Quests.ensure();
