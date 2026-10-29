@@ -31,6 +31,7 @@ const YG = {
   ver(v){ try{ return this.sdk && this.sdk.isVersionAtLeast(v); }catch(e){ return false; } },
 
   async init(){
+    try{ this._own = new Set([...document.body.children]); }catch(e){}
     const W = window.Telegram && window.Telegram.WebApp;
     // вне Telegram (просто в браузере) — тестовый режим: язык браузера, локальные сохранения
     if (!W || (!W.initData && (!W.platform || W.platform === "unknown"))){ I18N.apply(String(navigator.language || "ru").toLowerCase()); return; }
@@ -181,6 +182,44 @@ const YG = {
     if (this.isDesktop()){ if (!this._pcTold){ this._pcTold = true; UI.toast(T("На компьютере реклама сейчас недоступна — подарок просто так 🎁"), true); } onReward(); return; }
     UI.toast(T(why || "Реклама сейчас недоступна. Попробуй чуть позже"), true); onFail && onFail();
   },
+  // Показ рекламы со страховкой. AdsGram на ПК иногда не завершает show(): окно рекламы закрыто,
+  // а обещание так и не выполняется — игра оставалась на паузе до перезагрузки.
+  // Здесь окончание рекламы определяется и по самому окну: появилось и исчезло, не появилось за 10 с,
+  // игрок нажимает на игру при закрытом окне, или прошло 2 минуты. end() вызывается ровно один раз;
+  // если настоящий ответ AdsGram придёт позже, late() получит его (чтобы не потерять заслуженный подарок).
+  _own:null,   // свои элементы страницы (подсказки, окна игры) — не путать с окном рекламы
+  _overlays(){
+    if (!this._own) this._own = new Set([...document.body.children]);
+    const out = [];
+    for (const el of [...document.body.children, ...document.documentElement.children]){
+      if (el === document.body || el === document.head || /^(SCRIPT|STYLE|LINK|META)$/.test(el.tagName) || this._own.has(el)) continue;
+      const cs = getComputedStyle(el), r = el.getBoundingClientRect();
+      if (cs.display !== "none" && cs.visibility !== "hidden" && +cs.opacity > 0.05 && r.width > 80 && r.height > 80) out.push(el);
+    }
+    return out;
+  },
+  _runAd(ad, end, late){
+    const before = new Set(this._overlays()), t0 = Date.now();
+    let done = false, seen = false, goneAt = 0;
+    const shown = () => this._overlays().some(el => !before.has(el));
+    const finish = res => {
+      if (done) return; done = true; clearInterval(iv); document.removeEventListener("pointerdown", onTap, true);
+      if (res.forced) console.warn("AdsGram: окно рекламы закрыто без ответа —", res.forced);
+      end(res);
+    };
+    const iv = setInterval(()=>{
+      const age = Date.now() - t0;
+      if (shown()){ seen = true; goneAt = 0; }
+      else if (seen){ if (!goneAt) goneAt = Date.now(); else if (Date.now() - goneAt > 1200) finish({forced:"closed"}); }
+      else if (age > 10000) finish({forced:"noshow"});
+      if (age > 120000) finish({forced:"timeout"});
+    }, 300);
+    const onTap = () => { if (Date.now() - t0 > 1500 && !shown()) finish({forced:"tap"}); };
+    document.addEventListener("pointerdown", onTap, true);
+    const real = (ok, r) => { if (done){ late && late(ok, r); return; } finish({ok, r}); };
+    try{ Promise.resolve(ad.show()).then(r=>real(true, r), r=>real(false, r)); }
+    catch(e){ real(false, {error:true, description:String(e && e.message || e)}); }
+  },
   rewarded(onReward, onFail){
     if (this.adBusy) return;
     // вне Telegram — тестовая заглушка
@@ -190,14 +229,25 @@ const YG = {
     const ad = this._ad(TGC.adsReward);
     if (!ad){ this._note(false, {description:"no script"}); return this._noAd(onReward, onFail, "Реклама сейчас не загрузилась. Попробуй чуть позже"); }
     this.adBusy = true; this._adOpen = true; this._applyPause();
-    ad.show().then(r=>{
-      this._note(!!(r && r.done), r);
-      if (r && r.done) onReward(); else { UI.toast(T("Видео не досмотрено — подарка нет"), true); onFail && onFail(); }
-    }).catch(r=>{
-      this._note(false, r);
-      if (r && r.error) this._noAd(onReward, onFail);                          // реклама не загрузилась / нет рекламы
-      else { UI.toast(T("Видео не досмотрено — подарка нет"), true); onFail && onFail(); }   // игрок закрыл видео
-    }).finally(()=>{ this.adBusy = false; this._adOpen = false; this._applyPause(); });
+    let given = false; const give = () => { if (!given){ given = true; onReward(); } };
+    this._runAd(ad, res=>{
+      this.adBusy = false; this._adOpen = false; this._applyPause();
+      if (res.forced){
+        this._note(false, {description:"no answer (" + res.forced + ")"});
+        if (res.forced === "noshow" || this.isDesktop()) this._noAd(give, onFail, "Реклама сейчас не загрузилась. Попробуй чуть позже");
+        else { UI.toast(T("Видео не досмотрено — подарка нет"), true); onFail && onFail(); }
+        return;
+      }
+      const r = res.r;
+      if (res.ok){
+        this._note(!!(r && r.done), r);
+        if (r && r.done) give(); else { UI.toast(T("Видео не досмотрено — подарка нет"), true); onFail && onFail(); }
+      } else {
+        this._note(false, r);
+        if (r && r.error) this._noAd(give, onFail);                              // реклама не загрузилась / нет рекламы
+        else { UI.toast(T("Видео не досмотрено — подарка нет"), true); onFail && onFail(); }   // игрок закрыл видео
+      }
+    }, (ok, r)=>{ if (ok && r && r.done){ this._note(true, r); give(); } });  // AdsGram ответил позже страховки
   },
   // строки для экрана «Настройки»: состояние облака и рекламы
   diag(){
@@ -209,13 +259,14 @@ const YG = {
     else ad = this._adLast.ok ? T("📺 Реклама: показана") : `${T("📺 Реклама: не показана")}${this._adLast.desc ? " — " + this._adLast.desc : ""}`;
     return [this.cloudStatus(), `${ad} · ${this.sdk.platform || "?"}`];
   },
-  // межстраничная реклама — только в естественных паузах и не чаще раза в 3 минуты
+  // межстраничная реклама — только в естественных паузах и не чаще раза в 3 минуты.
+  // На ПК не показываем: AdsGram там часто открывает пустое окно, которое мелькает и мешает.
   interstitial(){
-    if (!this.sdk || this.adBusy || !TGC.adsInter) return;
+    if (!this.sdk || this.adBusy || !TGC.adsInter || this.isDesktop()) return;
     if (Date.now() - this.startedAt < 60000 || (Date.now() - this.lastInter)/1000 < CONFIG.interstitialMinGap) return;
     const ad = this._ad(TGC.adsInter); if (!ad) return;
     this.adBusy = true; this.lastInter = Date.now(); this._adOpen = true; this._applyPause();
-    ad.show().catch(()=>{}).finally(()=>{ this.adBusy = false; this._adOpen = false; this._applyPause(); });
+    this._runAd(ad, ()=>{ this.adBusy = false; this._adOpen = false; this._applyPause(); });
   },
   onNewCat(){ this.interstitial(); },
 
