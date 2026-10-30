@@ -9,4 +9,5 @@ window.TG_CONFIG = {
   adsReward: "56145",    // AdsGram: номер блока рекламы за награду, например: "12345"
   adsInter: "int-56146",     // AdsGram: номер межстраничного блока, например: "int-12345"
   adsDebug: false,  // true — показывать тестовую рекламу AdsGram. Перед запуском верните false
+   stats: "https://cat-merge-bot.khizhniy0073.workers.dev"
 };
