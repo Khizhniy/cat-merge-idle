@@ -81,7 +81,47 @@ const YG = {
      устройства; если есть — загружает его, а не затирает. Каждый запрос ограничен по времени,
      поэтому «потерянный» ответ Telegram (например, при сворачивании) больше не останавливает сохранения. */
   sid: Math.random().toString(36).slice(2, 10), _bootAt:0,
-  onLoaded(st){ this._bootAt = st.savedAt || 0; },
+  onLoaded(st){ this._bootAt = st.savedAt || 0; this.statsStart(); },
+
+  /* ---------- статистика для разработчика (свой сервер на Cloudflare, адрес в TG_CONFIG.stats) ----------
+     Отправляет: запуск игры, время в игре (раз в 2 минуты и при сворачивании), показы рекламы.
+     Подпись Telegram (initData) идёт с каждым сообщением — сервер проверяет, что это настоящий игрок.
+     Страну определяет Cloudflare по адресу запроса; номер аккаунта на сервере хранится только в виде хэша. */
+  _st:null,
+  _progress(){
+    try{ return {cats: typeof albumCount === "function" ? albumCount() : 0, worlds: S.unlocked || 1, merges: (S.stats && S.stats.merges) || 0}; }catch(e){ return {}; }
+  },
+  _post(t, extra){
+    const st = this._st; if (!st) return;
+    const body = JSON.stringify({t, sid: st.sid, init: this.sdk.initData, v: CONFIG.version, p: this.sdk.platform || "", ...extra});
+    try{ if (navigator.sendBeacon && navigator.sendBeacon(st.url, body)) return; }catch(e){}
+    try{ fetch(st.url, {method:"POST", body, keepalive:true, mode:"no-cors"}).catch(()=>{}); }catch(e){}
+  },
+  _newSession(){
+    const st = this._st;
+    st.sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    st.last = Date.now(); st.active = true;
+    this._post("open", {src: this.payload || "", ...this._progress()});
+  },
+  _beat(close){
+    const st = this._st; if (!st || !st.active) return;
+    const now = Date.now(), sec = Math.round((now - st.last) / 1000); st.last = now;
+    if (close) st.active = false;
+    this._post(close ? "close" : "beat", {sec, ...(close ? this._progress() : {})});
+  },
+  stat(t, extra){ if (this._st && this._st.active) this._post(t, extra || {}); },
+  statsStart(){
+    if (this._st || !this.sdk || !this.sdk.initData || !TGC.stats) return;
+    this._st = {url: String(TGC.stats).replace(/\/+$/, "") + "/e"};
+    this._newSession();
+    setInterval(()=>{ if (!document.hidden) this._beat(false); }, 120000);
+    const hide = () => this._beat(true);
+    // вернулись в игру: меньше 30 минут — та же сессия, больше — новый запуск
+    const back = () => { const st = this._st; if (st.active) return; if (Date.now() - st.last > 30 * 60000) this._newSession(); else { st.last = Date.now(); st.active = true; } };
+    try{ this.sdk.onEvent("deactivated", hide); this.sdk.onEvent("activated", back); }catch(e){}
+    document.addEventListener("visibilitychange", ()=> document.hidden ? hide() : back());
+    window.addEventListener("pagehide", hide);
+  },
   _cs(){ return this.sdk && this.ver("6.9") && this.sdk.CloudStorage ? this.sdk.CloudStorage : null; },
   _ds(){ return this.sdk && this.ver("9.0") && this.sdk.DeviceStorage ? this.sdk.DeviceStorage : null; },
   _call(fn, ms){ return new Promise((res, rej)=>{ let done = false; const t = setTimeout(()=>{ if (!done){ done = true; rej(new Error("timeout")); } }, ms);
@@ -176,7 +216,7 @@ const YG = {
   // Telegram на компьютере: Desktop, macOS, веб-версии
   isDesktop(){ const p = this.sdk && this.sdk.platform || ""; return /^(tdesktop|macos|weba|webk|web|unigram)$/.test(p); },
   _adLast:null,
-  _note(ok, r){ this._adLast = {at:Date.now(), ok, desc: r ? String(r.description || (r.error ? "error" : "") || r.state || "") : ""}; },
+  _note(ok, r){ this._adLast = {at:Date.now(), ok, desc: r ? String(r.description || (r.error ? "error" : "") || r.state || "") : ""}; this.stat("ad", {k:"reward", ok:ok ? 1 : 0}); },
   // на ПК рекламы в AdsGram может не быть — кнопки «🎬» тогда работают как подарок, а не «мёртвые»
   _noAd(onReward, onFail, why){
     if (this.isDesktop()){ if (!this._pcTold){ this._pcTold = true; UI.toast(T("На компьютере реклама сейчас недоступна — подарок просто так 🎁"), true); } onReward(); return; }
@@ -266,7 +306,7 @@ const YG = {
     if (Date.now() - this.startedAt < 60000 || (Date.now() - this.lastInter)/1000 < CONFIG.interstitialMinGap) return;
     const ad = this._ad(TGC.adsInter); if (!ad) return;
     this.adBusy = true; this.lastInter = Date.now(); this._adOpen = true; this._applyPause();
-    this._runAd(ad, ()=>{ this.adBusy = false; this._adOpen = false; this._applyPause(); });
+    this._runAd(ad, res=>{ this.adBusy = false; this._adOpen = false; this._applyPause(); this.stat("ad", {k:"inter", ok:res.ok && !res.forced ? 1 : 0}); });
   },
   onNewCat(){ this.interstitial(); },
 
