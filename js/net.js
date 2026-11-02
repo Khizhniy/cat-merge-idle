@@ -101,7 +101,7 @@ const YG = {
     const st = this._st;
     st.sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
     st.last = Date.now(); st.active = true;
-    this._post("open", {src: this.payload || "", ...this._progress()});
+    this._post("open", {src: this.payload || "", tz: new Date().getTimezoneOffset(), ...this._progress()});
   },
   _beat(close){
     const st = this._st; if (!st || !st.active) return;
@@ -121,6 +121,23 @@ const YG = {
     try{ this.sdk.onEvent("deactivated", hide); this.sdk.onEvent("activated", back); }catch(e){}
     document.addEventListener("visibilitychange", ()=> document.hidden ? hide() : back());
     window.addEventListener("pagehide", hide);
+    // со второго запуска предложим напоминания от бота
+    try{ const n = +(localStorage.getItem("cmi_runs") || 0) + 1; localStorage.setItem("cmi_runs", n); if (n >= 2) setTimeout(()=>this._askWrite(), 20000); }catch(e){}
+  },
+  // Напоминания: бот может писать игроку, только если тот нажал «Старт» в боте или разрешил сообщения.
+  // Спрашиваем один раз, своим окном с объяснением, затем системным окном Telegram.
+  _askWrite(){
+    const W = this.sdk;
+    if (!W || !this._st || typeof W.requestWriteAccess !== "function" || !this.ver("6.9")) return;
+    if (this.user && this.user.allows_write_to_pm) return;
+    try{ if (localStorage.getItem("cmi_wa")) return; localStorage.setItem("cmi_wa", "1"); }catch(e){ return; }
+    const ru = LANG !== "en";
+    UI.enqueue(()=>UI.showModal(`<h2>🔔 ${ru ? "Напоминать о подарках?" : "Remind you about gifts?"}</h2><p>${ru
+      ? "Котики напишут тебе в Telegram, когда накопят монеты и будет готов ежедневный подарок. Не чаще раза-двух в день, отключить можно в любой момент."
+      : "The cats will message you in Telegram when coins and your daily gift are ready. At most once or twice a day, turn it off anytime."}</p>`,
+      [{t: ru ? "🔔 Да, напоминать" : "🔔 Yes, remind me", c:"primary", f:()=>{ UI.closeModal();
+          try{ W.requestWriteAccess(ok=>{ if (ok && this.user) this.user.allows_write_to_pm = true; this._post("wa", {ok: ok ? 1 : 0, tz: new Date().getTimezoneOffset(), ...this._progress()}); }); }catch(e){} }},
+       {t: ru ? "Не сейчас" : "Not now", c:"", f:()=>UI.closeModal()}]));
   },
   _cs(){ return this.sdk && this.ver("6.9") && this.sdk.CloudStorage ? this.sdk.CloudStorage : null; },
   _ds(){ return this.sdk && this.ver("9.0") && this.sdk.DeviceStorage ? this.sdk.DeviceStorage : null; },
@@ -308,7 +325,7 @@ const YG = {
     this.adBusy = true; this.lastInter = Date.now(); this._adOpen = true; this._applyPause();
     this._runAd(ad, res=>{ this.adBusy = false; this._adOpen = false; this._applyPause(); this.stat("ad", {k:"inter", ok:res.ok && !res.forced ? 1 : 0}); });
   },
-  onNewCat(){ this.interstitial(); },
+  onNewCat(){ this.interstitial(); if (Date.now() - this.startedAt > 120000) this._askWrite(); },
 
   /* ---------- покупок и лидербордов в этой версии нет ---------- */
   price(){ return {text:"", img:""}; },
