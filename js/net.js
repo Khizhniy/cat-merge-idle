@@ -121,24 +121,31 @@ const YG = {
     try{ this.sdk.onEvent("deactivated", hide); this.sdk.onEvent("activated", back); }catch(e){}
     document.addEventListener("visibilitychange", ()=> document.hidden ? hide() : back());
     window.addEventListener("pagehide", hide);
-    // со второго запуска предложим напоминания от бота
-    try{ const n = +(localStorage.getItem("cmi_runs") || 0) + 1; localStorage.setItem("cmi_runs", n); if (n >= 2) setTimeout(()=>this._askWrite(), 20000); }catch(e){}
+    // через минуту игры предложим напоминания от бота
+    setTimeout(()=>this._askWrite(), 60000);
   },
   // Напоминания: бот может писать игроку, только если тот нажал «Старт» в боте или разрешил сообщения.
-  // Спрашиваем один раз, своим окном с объяснением, затем системным окном Telegram.
+  // Спрашиваем своим окном с объяснением, затем системным окном Telegram. Если игрок отказался —
+  // спросим снова через 3 дня, всего не больше 3 раз.
   _askWrite(){
     const W = this.sdk;
     if (!W || !this._st || typeof W.requestWriteAccess !== "function" || !this.ver("6.9")) return;
     if (this.user && this.user.allows_write_to_pm) return;
-    try{ if (localStorage.getItem("cmi_wa")) return; localStorage.setItem("cmi_wa", "1"); }catch(e){ return; }
+    if (document.getElementById("modal").classList.contains("on") || UI.sheet) { setTimeout(()=>this._askWrite(), 30000); return; }
+    let st = {}; try{ st = JSON.parse(localStorage.getItem("cmi_wa2") || "{}") || {}; }catch(e){}
+    if (st.ok || (st.n || 0) >= 3 || Date.now() - (st.at || 0) < 3 * 86400000) return;
+    st.n = (st.n || 0) + 1; st.at = Date.now();
+    const save = () => { try{ localStorage.setItem("cmi_wa2", JSON.stringify(st)); }catch(e){} };
+    save();
     const ru = LANG !== "en";
     UI.enqueue(()=>UI.showModal(`<h2>🔔 ${ru ? "Напоминать о подарках?" : "Remind you about gifts?"}</h2><p>${ru
       ? "Котики напишут тебе в Telegram, когда накопят монеты и будет готов ежедневный подарок. Не чаще раза-двух в день, отключить можно в любой момент."
       : "The cats will message you in Telegram when coins and your daily gift are ready. At most once or twice a day, turn it off anytime."}</p>`,
       [{t: ru ? "🔔 Да, напоминать" : "🔔 Yes, remind me", c:"primary", f:()=>{ UI.closeModal();
-          try{ W.requestWriteAccess(ok=>{ if (ok && this.user) this.user.allows_write_to_pm = true; this._post("wa", {ok: ok ? 1 : 0, tz: new Date().getTimezoneOffset(), ...this._progress()}); }); }catch(e){} }},
+          try{ W.requestWriteAccess(ok=>{ if (ok){ st.ok = 1; save(); if (this.user) this.user.allows_write_to_pm = true; } this._post("wa", {ok: ok ? 1 : 0, tz: new Date().getTimezoneOffset(), ...this._progress()}); }); }catch(e){} }},
        {t: ru ? "Не сейчас" : "Not now", c:"", f:()=>UI.closeModal()}]));
   },
+
   _cs(){ return this.sdk && this.ver("6.9") && this.sdk.CloudStorage ? this.sdk.CloudStorage : null; },
   _ds(){ return this.sdk && this.ver("9.0") && this.sdk.DeviceStorage ? this.sdk.DeviceStorage : null; },
   _call(fn, ms){ return new Promise((res, rej)=>{ let done = false; const t = setTimeout(()=>{ if (!done){ done = true; rej(new Error("timeout")); } }, ms);
@@ -325,7 +332,7 @@ const YG = {
     this.adBusy = true; this.lastInter = Date.now(); this._adOpen = true; this._applyPause();
     this._runAd(ad, res=>{ this.adBusy = false; this._adOpen = false; this._applyPause(); this.stat("ad", {k:"inter", ok:res.ok && !res.forced ? 1 : 0}); });
   },
-  onNewCat(){ this.interstitial(); if (Date.now() - this.startedAt > 120000) this._askWrite(); },
+  onNewCat(){ this.interstitial(); if (Date.now() - this.startedAt > 60000) this._askWrite(); },
 
   /* ---------- покупок и лидербордов в этой версии нет ---------- */
   price(){ return {text:"", img:""}; },
