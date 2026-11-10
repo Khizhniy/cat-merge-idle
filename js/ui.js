@@ -342,7 +342,8 @@ const UI = {
         <span class="rar" style="background:${rr.c}">${rr.ic} ${rr.n}</span><p>${esc(c.d)}</p>
         ${c.kind==="world" ? `<p>${T("Приносит")} <b>${fmt(INC[c.lv-1]*WORLDS[c.world].mult)} 🪙</b> ${T("в секунду")}${isNew?` · +${CONFIG.newCatPaws} 🐾`:""}</p>` : ""}
         ${c.bonus ? `<p>${T("Бонус:")} <b>+${Math.round(c.bonus*100)}%</b> ${T("ко всему доходу")}</p>` : ""}`,
-        isNew ? [{t:T("Ура!"), c:"primary", f:()=>{ this.closeModal(); if (YG.onNewCat) YG.onNewCat(); }}]
+        isNew ? [{t:T("Ура!"), c:"primary", f:()=>{ this.closeModal(); if (YG.onNewCat) YG.onNewCat(); }},
+                 ...(c.r >= 4 && YG.canStory && YG.canStory() ? [{t:T("📸 Похвастаться в истории"), c:"accent", f:()=>{ this.closeModal(); YG.story("cat", gid); }}] : [])]
               : [{t: S.favorite===gid ? T("⭐ Это твой любимчик") : T("⭐ Сделать любимым"), c:"accent", f:()=>{ S.favorite = gid; Game.pushCollect(); Game.save(); this.closeModal(); this.toast(T("Этого котика увидят другие игроки")); if (this.sheet==="album") this.renderSheet(); }},
                  {t:T("Закрыть"), c:"", f:()=>this.closeModal()}]);
     });
@@ -351,9 +352,9 @@ const UI = {
     const d = WORLDS[w];
     this.enqueue(()=>{ SFX.fanfare(); this.showModal(`<h2>${T("Мир «")}${esc(d.n)}${T("» собран! 🏆")}</h2><div class="pic">${catSVG(worldCatGid(w,CONFIG.levels))}</div>
       <p>${T("Все")} ${CONFIG.levels} ${T("котиков в альбоме")}</p><div class="lines">${lines.map(esc).join("<br>")}</div><p>${T("И ещё")} <b>+10%</b> ${T("к доходу этого мира навсегда")}</p>`,
-      next >= 0 ? [{t:`${T("Полетели в")} ${WORLDS[next].e} ${esc(WORLDS[next].n)}!`, c:"primary", f:()=>{ this.closeModal(); this.closeSheet(); Game.travel(next); this.toast(`${T("Добро пожаловать:")} ${WORLDS[next].e} ${WORLDS[next].n}!`); }},
+      (next >= 0 ? [{t:`${T("Полетели в")} ${WORLDS[next].e} ${esc(WORLDS[next].n)}!`, c:"primary", f:()=>{ this.closeModal(); this.closeSheet(); Game.travel(next); this.toast(`${T("Добро пожаловать:")} ${WORLDS[next].e} ${WORLDS[next].n}!`); }},
                   {t:T("Остаться здесь"), c:"", f:()=>{ this.closeModal(); YG.interstitial(); }}]
-                : [{t:T("Ура!"), c:"primary", f:()=>{ this.closeModal(); YG.interstitial(); }}]); });
+                : [{t:T("Ура!"), c:"primary", f:()=>{ this.closeModal(); YG.interstitial(); }}]).concat(YG.canStory && YG.canStory() ? [{t:T("📸 Похвастаться в истории"), c:"accent", f:()=>{ this.closeModal(); YG.story("w", w); }}] : [])); });
     if (creator) this.newCatModal(SPECIAL_BASE, true);
     if (Game.prestigeAvailable() && !S.tips.prest){ S.tips.prest = 1; this.enqueue(()=>this.showModal(`<h2>${T("Открыто перерождение 💎")}</h2><p>${T("Можно начать путь заново и получить кристаллы. Кристаллы дают бонусы")} <b>${T("навсегда")}</b>${T(". Альбом, наряды и лапки останутся.")}</p>`, [{t:T("Посмотреть"), c:"premium", f:()=>{ this.closeModal(); this.openSheet("upgrades","prestige"); }}, {t:T("Позже"), c:"", f:()=>this.closeModal()}])); }
   },
@@ -445,6 +446,7 @@ const UI = {
       case "res": G.resAction(arg.split(":")[0], +arg.split(":")[1]); break;
       case "evbuy": { const e = activeEvent(); if (e===null) break; const gid = EVENT_BASE + e*4 + (+arg); const c = ALBUM[gid]; if (S.album[gid]) break; if (S.ev.amt < c.price){ this.toast(`${T("Нужно")} ${EVENTS[e].cur.ic} ${c.price}`); break; } S.ev.amt -= c.price; S.album[gid] = true; this.newCatModal(gid, true); G.pushCollect(); G.save(true); break; }
       case "evad": return G.rewarded(()=>{ S.eventAdAt = now() + CONFIG.eventAdCooldown*1000; S.ev.amt += 15; this.toast(T("+15 за видео")); this.refresh(); });
+      case "story": return YG.story("", 0);
       case "copy": return YG.copy(arg).then(ok=>this.toast(ok ? T("Ссылка скопирована! Отправь её другу") : T("Не получилось скопировать. Продиктуй другу свой код")));
       case "share": { const txt = `${T("Заходи в Cat Merge Idle! Мой код друга:")} ${S.friends.code}`;
         if (YG.share) return YG.share(arg, txt);
@@ -685,6 +687,7 @@ const UI = {
       <div class="note" style="margin-bottom:.2rem;text-align:center">${T("Твой код друга:")}</div><div class="codeBox">${esc(code)}</div>`;
     h += `<div class="mBtns" style="margin-top:0">`;
     if (link && YG.share) h += `<button class="btn primary" data-act="share" data-arg="${esc(link)}">${T(YG.shareLabel || "📤 Поделиться")}</button>`;
+    if (link && YG.canStory && YG.canStory()) h += `<button class="btn accent" data-act="story">${T("📸 Поделиться в истории")}</button>`;
     if (link) h += `<button class="btn ${YG.share ? "" : "primary"}" data-act="copy" data-arg="${esc(link)}">${T("🔗 Скопировать ссылку-приглашение")}</button>`;
     else h += `<button class="btn primary" data-act="copy" data-arg="${esc(code)}">${T("📋 Скопировать код")}</button>`;
     if (link && !YG.share && navigator.share) h += `<button class="btn" data-act="share" data-arg="${esc(link)}">${T("📤 Поделиться")}</button>`;

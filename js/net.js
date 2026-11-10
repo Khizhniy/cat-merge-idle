@@ -345,6 +345,26 @@ const YG = {
     const bot = String(TGC.bot).replace(/^@/, "");
     return TGC.app ? `https://t.me/${bot}/${TGC.app}?startapp=f_${code}` : `https://t.me/${bot}?startapp=f_${code}`;
   },
+  // Истории Telegram (Bot API 7.8): картинка с сайта игры + ссылка-приглашение в подписи.
+  // Ссылка-виджет на картинке доступна только подписчикам Telegram Premium.
+  canStory(){ return !!(this.sdk && typeof this.sdk.shareToStory === "function" && this.ver("7.8") && TGC.bot); },
+  story(kind, arg){
+    if (!this.canStory()) return;
+    const lang = LANG === "en" ? "en" : "ru";
+    const base = location.href.replace(/[?#].*$/, "").replace(/[^/]*$/, "");
+    const img = kind === "w" ? `story_w${+arg || 0}_${lang}.jpg` : `story_${lang}.jpg`;
+    const link = this.inviteLink(S.friends.code);
+    const params = {text: `${T("Котики в Telegram 🐱 Играй со мной:")} ${link}`.slice(0, 200)};
+    if (this.user && this.user.is_premium) params.widget_link = {url: link, name: lang === "en" ? "Play" : "Играть"};
+    try{ this.sdk.shareToStory(base + img, params); }catch(e){ console.warn("shareToStory", e); return; }
+    this.stat("story", {k: kind || "gen"});
+    // маленькая благодарность — раз в день
+    try{
+      const d = dayStr(0);
+      if (localStorage.getItem("cmi_story") !== d){ localStorage.setItem("cmi_story", d);
+        setTimeout(()=>{ const l = Game.give({paws: 10}); UI.toast(`${T("Спасибо, что делишься! 🎁")} ${l.join(", ")}`, true); Game.save(); UI.update(); }, 1500); }
+    }catch(e){}
+  },
   share(link, text){
     const url = `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`;
     try{ if (this.sdk) return this.sdk.openTelegramLink(url); }catch(e){}
